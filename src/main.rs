@@ -1,9 +1,11 @@
 use csv::ReaderBuilder;
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs;
 use std::path::Path;
 
 // Simple Naive Bayes Classifier for Spam Detection
+#[derive(Serialize, Deserialize)]
 struct SpamClassifier {
     spam_words: Vec<String>,
     ham_words: Vec<String>,
@@ -67,9 +69,24 @@ impl SpamClassifier {
         // Simple heuristic: More than 2 spam indicators suggests spam
         spam_word_matches > 2
     }
+
+    fn save_model(&self, file_path: &str) -> Result<(), Box<dyn Error>> {
+        let json = serde_json::to_string(self)?;
+        fs::write(file_path, json)?;
+        println!("Model saved to {}", file_path);
+        Ok(())
+    }
+
+    fn load_model(file_path: &str) -> Result<Self, Box<dyn Error>> {
+        let json = fs::read_to_string(file_path)?;
+        let classifier: SpamClassifier = serde_json::from_str(&json)?;
+        println!("Model loaded from {}", file_path);
+        Ok(classifier)
+    }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let model_file_path = "spam_classifier_model.json";
     let file_path = "emails.csv";
 
     // Ensure dataset exists
@@ -80,9 +97,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Load emails
     let emails = load_data(file_path)?;
 
-    // Train classifier
-    let mut classifier = SpamClassifier::new();
-    classifier.train(&emails);
+    // Train classifier or load existing model
+    let mut classifier: SpamClassifier;
+
+    if Path::new(model_file_path).exists() {
+        classifier = SpamClassifier::load_model(model_file_path)?;
+    } else {
+        classifier = SpamClassifier::new();
+        classifier.train(&emails);
+        classifier.save_model(model_file_path)?; // Save the trained model
+    }
 
     // Interactive mode
     loop {
